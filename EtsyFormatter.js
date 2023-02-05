@@ -4,19 +4,14 @@ const fetch = require('node-fetch');
 const app = express();
 const chromeLauncher = require('chrome-launcher');
 const { Server } = require('http');
+const apiKey = require('./apiKeys.json');
+const itemNumbers = require('./etsyItems.json');
 
-const SHOP_ID = 20692514;
-const sectionsUrl = `https://openapi.etsy.com/v3/application/shops/${SHOP_ID}/sections`;
-const x_api_key = '89t4onk893vp1xsgifqogfiv';
-// NOTE: Place Newest Listings First in Line!!
-const Earrings =
-  '710574152,724432175,774820728,728749506,871073324,884997169,761770838,761771080,775644993,761769856,775644761,761769034,761769260,761769542,722125695,953480739,939528186,710573748,722128815,708268952,708350998,713481212,774820172,742610037,743724102,722209839';
-const Pendants =
-  '1303277148,1303274760,743722532,743721308,757589125,724435341,956905038,708275794,775642205,954834035,939530500,798578012,812459087,710575432,757587697,800313771,788707399,711518670,757590925,725378803,761766712,775642033,732939021,719079064,725380327,757592605,788707659,722133413,802100228';
-const Rings =
-  '727334631,871060928,713479720,956902166,713477668,812452989,713478292,727336689,757595795';
-const Nose = '885005191';
-const Sets = '786433078';
+const Earrings = itemNumbers.earrings;
+const Pendants = itemNumbers.pendants;
+const Rings = itemNumbers.rings;
+const Nose = itemNumbers.nose;
+const Sets = itemNumbers.sets;
 const AllListings = Earrings.concat(
   ',',
   Pendants,
@@ -31,12 +26,27 @@ const AllListings = Earrings.concat(
 const requestOptions = {
   method: 'GET',
   headers: {
-    'x-api-key': `${x_api_key}`,
+    'x-api-key': `${apiKey.etsyKey}`,
   },
 };
 
-const getListingSectionUrl = (sectionIds) => {
-  return `https://openapi.etsy.com/v3/application/listings/batch?listing_ids=${sectionIds}&includes=images`;
+const getListingSectionUrl = (section) => {
+  let sectionIDs;
+  switch (section) {
+    case 'earrings':
+      sectionIDs = Earrings;
+    case 'pendants':
+      sectionIDs = Pendants;
+    case 'rings':
+      sectionIDs = Rings;
+    case 'nose':
+      sectionIDs = Nose;
+    case 'sets':
+      sectionIDs = Sets;
+    default:
+      sectionIDs = AllListings;
+  }
+  return `https://openapi.etsy.com/v3/application/listings/batch?listing_ids=${sectionIDs}&includes=images`;
 };
 
 const imageInfo = (item) => {
@@ -166,109 +176,30 @@ const separateData = (data, section) => {
       fs.writeFileSync('Listings/EtsyRings.json', JSON.stringify(rings));
       fs.writeFileSync('Listings/EtsyNose.json', JSON.stringify(nose));
       fs.writeFileSync('Listings/EtsySets.json', JSON.stringify(sets));
-      fs.writeFileSync('Listings/EtsyAll.json', JSON.stringify(all));
       break;
   }
+  fs.writeFileSync('Listings/EtsyAll.json', JSON.stringify(all));
 };
 
-app.get('/', async (req, res) => {
-  let response;
-  const operation = process.argv[2];
-  // const listingSection = process.argv[3] ? process.argv[3] : 'all';
-  const listingSection = 'all';
-  console.log('Operation: ', operation);
-  if (operation === 'listings') {
-    console.log('Listing Section: ', listingSection);
-  }
+app.get('/', async () => {
+  const listingSection = process.argv[2] ? process.argv[2] : 'all';
 
-  switch (operation) {
-    case 'sections':
-      response = await fetch(
-        sectionsUrl, // Get Sections
-        requestOptions
-      );
-      break;
-    case 'listings':
-      response = await fetch(
-        getListingSectionUrl(AllListings), // Get Listings
-        requestOptions
-      );
-      break;
-    default:
-      console.log(`${operation} invalid, Please specify a valid command`);
-      process.exit(1);
-  }
+  console.log('Listing Section: ', listingSection);
 
-  // switch (operation) {
-  //   case 'sections':
-  //     response = await fetch(
-  //       sectionsUrl, // Get Sections
-  //       requestOptions
-  //     );
-  //     break;
-  //   case 'listings':
-  //     switch (listingSection) {
-  //       case 'earrings':
-  //         response = await fetch(
-  //           getListingSectionUrl(Earrings), // Get Earrings
-  //           requestOptions
-  //         );
-  //         break;
-  //       case 'pendants':
-  //         response = await fetch(
-  //           getListingSectionUrl(Pendants), // Get Pendants
-  //           requestOptions
-  //         );
-  //         break;
-  //       case 'rings':
-  //         response = await fetch(
-  //           getListingSectionUrl(Rings), // Get Rings
-  //           requestOptions
-  //         );
-  //         break;
-  //       case 'nose':
-  //         response = await fetch(
-  //           getListingSectionUrl(Nose), // Get Nose
-  //           requestOptions
-  //         );
-  //         break;
-  //       case 'sets':
-  //         response = await fetch(
-  //           getListingSectionUrl(Sets), // Get Sets
-  //           requestOptions
-  //         );
-  //         break;
-  //       case 'all':
-  //       default:
-  //         response = await fetch(
-  //           getListingSectionUrl(AllListings), // Get Listings
-  //           requestOptions
-  //         );
-  //         break;
-  //     }
-  //     break;
-  //   default:
-  //     console.log(`${operation} invalid, Please specify a valid command`);
-  //     process.exit(1);
-  // }
+  let response = await fetch(
+    getListingSectionUrl(listingSection), // Get Listings
+    requestOptions
+  );
 
   if (response?.ok) {
     const data = await response.json();
-    switch (operation) {
-      case 'sections':
-        fs.writeFileSync('./Listings/EtsySections.json', JSON.stringify(data));
-        break;
-      case 'listings':
-        console.log('Processing Listings...');
-        separateData(data, listingSection);
-        break;
-    }
-    res.send('Response Received: ' + new Date().toLocaleString());
+    fs.writeFileSync('./Listings/UnfilteredData.json', JSON.stringify(data));
+    console.log('Processing Listings...');
+    separateData(data, listingSection);
     console.log('Response Received: ' + new Date().toLocaleString());
     process.exit(1);
   } else {
     console.log('Error:', response.status, response.statusText);
-    res.send('oops');
   }
 });
 
@@ -287,11 +218,9 @@ app.listen(port, () => {
 });
 
 // To Run, pick one of the following commands:
-// node EtsyFormatter listings
-// node EtsyFormatter listings all
-// node EtsyFormatter listings earrings
-// node EtsyFormatter listings pendants
-// node EtsyFormatter listings rings
-// node EtsyFormatter listings nose
-// node EtsyFormatter listings sets
-// node EtsyFormatter sections
+// node EtsyFormatter OR node EtsyFormatter all
+// node EtsyFormatter earrings
+// node EtsyFormatter pendants
+// node EtsyFormatter rings
+// node EtsyFormatter nose
+// node EtsyFormatter sets
